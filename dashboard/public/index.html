@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Proxy Console</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0b1210;
+    --panel: #0f1a17;
+    --line: #1e2e29;
+    --signal: #35e0a1;
+    --signal-dim: #1f6b53;
+    --text: #d8e6e0;
+    --text-dim: #7c948b;
+    --danger: #e0645f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+
+  .console {
+    width: 100%;
+    max-width: 560px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--signal-dim);
+  }
+  .dot.live { background: var(--signal); box-shadow: 0 0 8px var(--signal); }
+  .titlebar h1 {
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0;
+    font-weight: 600;
+  }
+  .status-tag {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+  }
+  .status-tag.ready { color: var(--signal); border-color: var(--signal-dim); }
+
+  .body { padding: 22px 18px 26px; }
+
+  .field { margin-bottom: 18px; }
+  .field-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .field-value {
+    font-size: 14px;
+    background: #08110f;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    word-break: break-all;
+  }
+  .field-value span { flex: 1; }
+  .copy-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 5px 9px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .copy-btn:hover { border-color: var(--signal-dim); color: var(--signal); }
+  .copy-btn:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+
+  .qr-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    margin-top: 22px;
+  }
+  #qrcode { background: #fff; padding: 10px; border-radius: 4px; line-height: 0; }
+  .qr-hint { font-size: 12px; color: var(--text-dim); text-align: center; }
+
+  .link-btn {
+    display: block;
+    text-align: center;
+    margin-top: 14px;
+    background: var(--signal);
+    color: #062017;
+    font-weight: 600;
+    font-size: 13px;
+    text-decoration: none;
+    padding: 11px;
+    border-radius: 3px;
+  }
+  .link-btn:hover { filter: brightness(1.08); }
+
+  .empty {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .empty code {
+    background: #08110f;
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+  <div class="console">
+    <div class="titlebar">
+      <div class="dot" id="statusDot"></div>
+      <h1>Telegram Proxy</h1>
+      <div class="status-tag" id="statusTag">checking</div>
+    </div>
+    <div class="body" id="body">
+      <div class="empty">Loading connection info&hellip;</div>
+    </div>
+  </div>
+
+<script>
+async function load() {
+  const bodyEl = document.getElementById("body");
+  const dotEl = document.getElementById("statusDot");
+  const tagEl = document.getElementById("statusTag");
+  try {
+    const res = await fetch("/api/proxy");
+    const data = await res.json();
+
+    if (!data.ready) {
+      dotEl.classList.remove("live");
+      tagEl.textContent = "not ready";
+      tagEl.classList.remove("ready");
+      bodyEl.innerHTML = `<div class="empty">
+        Waiting on configuration. Make sure these are all set on this service:<br><br>
+        &bull; <code>MTG_SECRET</code> (shared with the mtg-proxy service)<br>
+        &bull; <code>PROXY_DOMAIN</code> &rarr; reference variable to the mtg-proxy service's <code>RAILWAY_TCP_PROXY_DOMAIN</code><br>
+        &bull; <code>PROXY_PORT</code> &rarr; reference variable to the mtg-proxy service's <code>RAILWAY_TCP_PROXY_PORT</code>
+      </div>`;
+      return;
+    }
+
+    dotEl.classList.add("live");
+    tagEl.textContent = "live";
+    tagEl.classList.add("ready");
+
+    bodyEl.innerHTML = `
+      <div class="field">
+        <div class="field-label">Server</div>
+        <div class="field-value"><span class="mono">${data.domain}</span></div>
+      </div>
+      <div class="field">
+        <div class="field-label">Port</div>
+        <div class="field-value"><span class="mono">${data.port}</span></div>
+      </div>
+      <div class="field">
+        <div class="field-label">Secret</div>
+        <div class="field-value">
+          <span class="mono" id="secretVal">${data.secret}</span>
+          <button class="copy-btn" data-copy="${data.secret}">copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">tg:// link</div>
+        <div class="field-value">
+          <span class="mono" style="font-size:12px">${data.tgLink}</span>
+          <button class="copy-btn" data-copy="${data.tgLink}">copy</button>
+        </div>
+      </div>
+      <a class="link-btn" href="${data.tgLink}">Open in Telegram</a>
+      <div class="qr-wrap">
+        <div id="qrcode"></div>
+        <div class="qr-hint">Scan with the Telegram app to connect automatically</div>
+      </div>
+    `;
+
+    new QRCode(document.getElementById("qrcode"), {
+      text: data.tmeLink,
+      width: 176,
+      height: 176,
+      colorDark: "#08110f",
+      colorLight: "#ffffff",
+    });
+
+    bodyEl.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const original = btn.textContent;
+        btn.textContent = "copied";
+        setTimeout(() => (btn.textContent = original), 1200);
+      });
+    });
+  } catch (err) {
+    tagEl.textContent = "error";
+    bodyEl.innerHTML = `<div class="empty">Could not load proxy info: ${err.message}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>
