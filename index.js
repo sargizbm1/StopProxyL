@@ -39,7 +39,7 @@ function ensureSecret() {
     if (existing) return existing;
   }
   console.log(`[setup] Generating a new FakeTLS secret (fronting: ${FRONTING_DOMAIN})...`);
-  const generated = execFileSync("mtg", ["generate-secret", "tls", "-c", FRONTING_DOMAIN])
+  const generated = execFileSync("mtg", ["generate-secret", "--hex", FRONTING_DOMAIN])
     .toString()
     .trim();
   writeFileSync(SECRET_FILE, generated, { mode: 0o600 });
@@ -70,7 +70,7 @@ console.log("=".repeat(60));
 
 // --- Step 3: run mtg as a child process, restart it if it dies ----------
 function startMtg() {
-  const child = spawn("mtg", ["run", SECRET, "--bind", `0.0.0.0:${MTG_PORT}`], {
+  const child = spawn("mtg", ["simple-run", `0.0.0.0:${MTG_PORT}`, SECRET], {
     stdio: "inherit",
   });
   let restarted = false;
